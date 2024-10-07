@@ -9,8 +9,10 @@ const jwtSecret = process.env.JWT_SECRET || '@StayAwake1!';
 const registerUser = (req, res) => {
     const { username, email, password } = req.body;
 
+    // Check if the user already exists
     client.query('SELECT * FROM users WHERE email = $1', [email], (err, result) => {
         if (err) {
+            console.error('Database error:', err); // Log database errors for debugging
             return res.status(500).json({ message: 'Database error' });
         }
 
@@ -18,13 +20,16 @@ const registerUser = (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
+        // Hash the user's password
         const hashedPassword = bcrypt.hashSync(password, 10);
 
+        // Insert the new user into the database
         client.query(
             'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email',
             [username, email, hashedPassword],
             (err, result) => {
                 if (err) {
+                    console.error('Database error on user registration:', err); // Log specific registration errors
                     return res.status(500).json({ message: 'Database error' });
                 }
 
@@ -42,8 +47,10 @@ const registerUser = (req, res) => {
 const loginUser = (req, res) => {
     const { email, password } = req.body;
 
+    // Check if the user exists in the database
     client.query('SELECT * FROM users WHERE email = $1', [email], (err, result) => {
         if (err) {
+            console.error('Database error:', err); // Log database errors for debugging
             return res.status(500).json({ message: 'Database error' });
         }
 
@@ -86,7 +93,12 @@ const updateUserProfile = (req, res) => {
         [username, email, hashedPassword, userId],
         (err, result) => {
             if (err) {
+                console.error('Database error while updating profile:', err); // Log profile update errors
                 return res.status(500).json({ message: 'Database error' });
+            }
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ message: 'User not found' });
             }
 
             const updatedUser = result.rows[0];

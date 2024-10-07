@@ -1,24 +1,30 @@
 const jwt = require('jsonwebtoken');
 
-// Use the same secret key as in userController.js
-const jwtSecret = process.env.JWT_SECRET || '@StayAwake+=1!';
+function verifyToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
 
-const authenticateToken = (req, res, next) => {
-    const token = req.header('Authorization').replace('Bearer ', '');
-    console.log('Received Token:', token);  // Log the received token
+    console.log('Received headers:', req.headers);
 
-
-    if (!token) {
-        return res.status(401).json({ message: 'Access denied' });
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.error(`Authorization header is missing or incorrect format on route: ${req.originalUrl}`);
+        return res.status(403).json({ message: 'Authorization header missing or incorrect format' });
     }
 
-    try {
-        const verified = jwt.verify(token, jwtSecret);
-        req.user = verified;
+    const token = authHeader.split(' ')[1];
+
+    jwt.verify(token, process.env.JWT_SECRET || 'default_secret_key', (err, decoded) => {
+        if (err) {
+            console.error('Token verification error:', err.message);
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ message: 'Token expired, please log in again' });
+            }
+            return res.status(401).json({ message: 'Invalid or expired token' });
+        }
+
+        req.user = decoded;
+        console.log('Token verification successful:', decoded);
         next();
-    } catch (err) {
-        res.status(400).json({ message: 'Invalid token' });
-    }
-};
+    });
+}
 
-module.exports = authenticateToken;
+module.exports = verifyToken;

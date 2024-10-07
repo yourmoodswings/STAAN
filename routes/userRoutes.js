@@ -1,52 +1,270 @@
+require('dotenv').config();
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser, updateUserProfile } = require('../controllers/userController');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const pool = require('../config/db');
+const axios = require('axios');
+const querystring = require('querystring');
 const authenticateToken = require('../middleware/authMiddleware');
 
-// POST request for user registration
-router.post('/register', registerUser);
+// Helper function to get the frontend URL dynamically
+const getFrontendUrl = () => {
+    return process.env.NODE_ENV === 'production'
+        ? 'https://staan.onrender.com'
+        : 'http://localhost:3001';
+};
 
-// POST request for user login
-router.post('/login', loginUser);
-
-// GET request for user profile (secured)
-router.get('/profile', authenticateToken, async (req, res) => {
-    const userId = req.user.id;
+// Route for user registration
+router.post('/register', async (req, res) => {
+    const { username, email, password } = req.body;
 
     try {
-        // Fetch the user's basic info (username, email, favorite artists)
-        const userResult = await client.query(
-            'SELECT username, email, favorite_artists FROM users WHERE id = $1',
-            [userId]
-        );
-        const user = userResult.rows[0];
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Fetch the user's recent reviews
-        const reviewResult = await client.query(
-            'SELECT song_name, artist_name, review FROM reviews WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5',
-            [userId]
-        );
+        const query = `
+            INSERT INTO users (username, email, password)
+            VALUES ($1, $2, $3)
+            RETURNING id, username, email;
+        `;
+        const values = [username, email, hashedPassword];
+        const { rows } = await pool.query(query, values);
 
-        // Ensure `recentReviews` is always an array
-        const recentReviews = reviewResult.rows.length > 0 ? reviewResult.rows : [];
-
-        // Respond with the user profile data
-        res.json({
-            user: {
-                username: user.username,
-                email: user.email,
-                favoriteArtists: user.favorite_artists || [],  // Default to empty array if undefined
-                recentReviews: recentReviews,  // Always send as an array, even if empty
-            },
-        });
+        res.status(201).json({ message: 'User registered successfully', user: rows[0] });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error registering user:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
+// Route for user login (allowing login via either email or username)
+router.post('/login', async (req, res) => {
+    const { emailOrUsername, password } = req.body;
 
-// PUT request to update user profile (secured)
-router.put('/profile', authenticateToken, updateUserProfile);
+    try {
+        const query = `SELECT * FROM users WHERE email = $1 OR username = $1;`;
+        const values = [emailOrUsername];
+        const { rows } = await pool.query(query, values);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = rows[0];
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || '@StayAwake+=1!', {
+            expiresIn: '1h',
+        });
+
+        req.session.userId = user.id;
+        req.session.save((err) => {
+            if (err) {
+                console.error('Error saving session:', err);
+                return res.status(500).json({ message: 'Failed to save session' });
+            }
+            res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
+        });
+
+    } catch (error) {
+        console.error('Error logging in user:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Spotify Login
+router.get('/spotify-login', (req, res) => {
+    const scopes = 'user-read-private user-read-email playlist-read-private';
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
+
+    res.redirect(
+        'https://accounts.spotify.com/authorize?' +
+        querystring.stringify({
+            response_type: 'code',
+            client_id: clientId,
+            scope: scopes,
+            redirect_uri: redirectUri,
+        })
+    );
+});
+
+// Callback for Spotify token exchange
+router.get('/callback', async (req, res) => {
+    console.log('Session data during Spotify callback:', req.session); 
+    try {
+        const code = req.query.code;
+
+        if (!code) {
+            console.error('No authorization code provided.');
+            return res.status(400).json({ message: 'No authorization code provided.' });
+        }
+
+        const tokenUrl = 'https://accounts.spotify.com/api/token';
+        const clientId = process.env.SPOTIFY_CLIENT_ID;
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+        const redirectUri = process.env.SPOTIFY_REDIRECT_URI;
+
+        const data = {
+            code: code,
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code',
+        };
+
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
+        };
+
+        const response = await axios.post(tokenUrl, querystring.stringify(data), { headers });
+        const { access_token, refresh_token, expires_in } = response.data;
+        console.log('Received Spotify tokens:', { access_token, refresh_token, expires_in });
+
+        const userId = req.session?.userId;
+
+        if (!userId) {
+            console.error('User session missing.');
+            req.session.destroy();
+            return res.status(400).json({ message: 'User session missing. Please log in again.' });
+        }
+
+        const spotifyTokenExpiresAt = new Date(Date.now() + expires_in * 1000);
+
+        const updateQuery = `
+            UPDATE users
+            SET spotify_access_token = $1,
+                spotify_refresh_token = $2,
+                spotify_token_expires_at = $3,
+                platform_connected = 'spotify',
+                is_spotify_connected = true
+            WHERE id = $4
+            RETURNING id, username, email;
+        `;
+        const updateValues = [access_token, refresh_token, spotifyTokenExpiresAt, userId];
+
+        const result = await pool.query(updateQuery, updateValues);
+
+        if (result.rows.length === 0) {
+            console.error('User not found during database update.');
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        req.session.save((err) => {
+            if (err) {
+                console.error('Error saving session during Spotify callback:', err);
+                return res.status(500).json({ message: 'Failed to save session' });
+            }
+            res.redirect(`${getFrontendUrl()}/${result.rows[0].username}`);
+        });
+
+    } catch (error) {
+        console.error('Error during Spotify token exchange:', error.message);
+        res.status(500).json({ message: 'Token exchange failed' });
+    }
+});
+
+// Route for refreshing the Spotify token
+router.post('/refresh-token', async (req, res) => {
+    try {
+        const userId = req.session?.userId;
+
+        if (!userId) {
+            console.error('User session missing.');
+            req.session.destroy();
+            return res.status(400).json({ message: 'User session missing. Please log in again.' });
+        }
+
+        const query = `
+            SELECT spotify_refresh_token FROM users WHERE id = $1;
+        `;
+        const values = [userId];
+        const { rows } = await pool.query(query, values);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const { spotify_refresh_token } = rows[0];
+
+        if (!spotify_refresh_token) {
+            return res.status(400).json({ message: 'Spotify refresh token missing. Please reconnect your Spotify account.' });
+        }
+
+        const refreshUrl = 'https://accounts.spotify.com/api/token';
+        const clientId = process.env.SPOTIFY_CLIENT_ID;
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+
+        const data = {
+            grant_type: 'refresh_token',
+            refresh_token: spotify_refresh_token,
+        };
+
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
+        };
+
+        const response = await axios.post(refreshUrl, querystring.stringify(data), { headers });
+
+        const { access_token, expires_in } = response.data;
+        const spotifyTokenExpiresAt = new Date(Date.now() + expires_in * 1000);
+
+        const updateQuery = `
+            UPDATE users
+            SET spotify_access_token = $1,
+                spotify_token_expires_at = $2
+            WHERE id = $3
+            RETURNING id, username, email;
+        `;
+        const updateValues = [access_token, spotifyTokenExpiresAt, userId];
+
+        const result = await pool.query(updateQuery, updateValues);
+
+        res.json({
+            access_token,
+            message: 'Spotify token refreshed successfully',
+        });
+    } catch (error) {
+        console.error('Error refreshing Spotify token:', error);
+        res.status(500).json({ message: 'Failed to refresh Spotify token' });
+    }
+});
+
+// Fetch user profile
+router.get('/profile', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const query = `
+            SELECT id, username, email, spotify_access_token, spotify_refresh_token, is_spotify_connected 
+            FROM users WHERE id = $1;
+        `;
+        const values = [userId];
+
+        const { rows } = await pool.query(query, values);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({
+            user: {
+                id: rows[0].id,
+                username: rows[0].username,
+                email: rows[0].email,
+                spotifyAccessToken: rows[0].spotify_access_token,
+                spotifyRefreshToken: rows[0].spotify_refresh_token,
+                isSpotifyConnected: rows[0].is_spotify_connected
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 module.exports = router;
