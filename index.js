@@ -11,7 +11,7 @@ const port = process.env.PORT || 3000;
 
 // CORS setup
 app.use(cors({
-  origin: ['https://staan.onrender.com', 'http://localhost:3000', 'http://localhost:3001'],
+  origin: ['https://staan.onrender.com', 'http://localhost:3001'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true // Important for session handling with frontend
@@ -35,7 +35,7 @@ app.use(
     saveUninitialized: false, // Prevents uninitialized sessions from being saved
     cookie: {
       maxAge: 3600000, // 1 hour
-      secure: process.env.NODE_ENV === 'production', // Only secure cookies in production
+      secure: true, // Only secure cookies in production
       httpOnly: true, // Prevent client-side JS from accessing cookies
       sameSite: 'none', // Required for cross-origin cookies (such as between frontend and backend)
     },
