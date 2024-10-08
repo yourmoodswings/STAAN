@@ -30,7 +30,7 @@ app.use(
       pool: client,
       tableName: 'session',
     }),
-    secret: process.env.SESSION_SECRET || 'your_default_secret',
+    secret: process.env.SESSION_SECRET || '!DontStop!',
     resave: false, // Ensures the session is only saved if modified
     saveUninitialized: false, // Prevents uninitialized sessions from being saved
     cookie: {
