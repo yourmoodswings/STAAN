@@ -17,7 +17,7 @@ function App() {
   const [spotifyToken, setSpotifyToken] = useState(localStorage.getItem('spotifyAccessToken') || null);
   const [spotifyData, setSpotifyData] = useState(null);
   const navigate = useNavigate();
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000'; // Fallback to localhost if not set
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://staan-backend.onrender.com'; // Fallback to localhost if not set
 
   const code = new URLSearchParams(window.location.search).get('code');
 
