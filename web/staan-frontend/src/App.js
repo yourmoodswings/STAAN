@@ -17,7 +17,7 @@ function App() {
   const [spotifyToken, setSpotifyToken] = useState(localStorage.getItem('spotifyAccessToken') || null);
   const [spotifyData, setSpotifyData] = useState(null);
   const navigate = useNavigate();
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://staan-backend.onrender.com'; // Fallback to localhost if not set
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://staan-backend.onrender.com';
 
   const code = new URLSearchParams(window.location.search).get('code');
 
@@ -31,6 +31,7 @@ function App() {
       });
 
       if (response.status === 401) {
+        // Spotify token is expired, refresh it
         const refreshedTokenResponse = await fetch(`${API_BASE_URL}/api/users/refresh-token`, {
           method: 'POST',
           headers: {
@@ -43,7 +44,7 @@ function App() {
           const refreshedData = await refreshedTokenResponse.json();
           const newAccessToken = refreshedData.access_token;
           localStorage.setItem('spotifyAccessToken', newAccessToken);
-          return await fetchSpotifyData(newAccessToken);
+          return await fetchSpotifyData(newAccessToken); // Retry with new token
         } else {
           throw new Error('Failed to refresh Spotify token.');
         }
@@ -72,7 +73,7 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${storedToken}`,
+          Authorization: `Bearer ${storedToken}`,
           'Content-Type': 'application/json',
         },
         credentials: 'include',
@@ -97,40 +98,40 @@ function App() {
     }
   }, [API_BASE_URL, fetchSpotifyData]);
 
- // Handle Spotify token exchange after Spotify login
-useEffect(() => {
+  // Handle Spotify token exchange after Spotify login
+  useEffect(() => {
     const fetchSpotifyToken = async () => {
-        if (code && token) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/users/callback`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    credentials: 'include', // Ensure credentials are included for session handling
-                    body: JSON.stringify({ code }),
-                });
+      if (code && token) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/users/callback`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: 'include', // Ensure credentials are included for session handling
+            body: JSON.stringify({ code }),
+          });
 
-                if (!response.ok) {
-                    throw new Error('Failed to exchange Spotify token');
-                }
+          if (!response.ok) {
+            throw new Error('Failed to exchange Spotify token');
+          }
 
-                const data = await response.json();
-                setSpotifyToken(data.access_token);
-                localStorage.setItem('spotifyAccessToken', data.access_token);
-                localStorage.setItem('spotifyRefreshToken', data.refresh_token);
-                setMessage('Spotify connected successfully.');
-                fetchProfile();  
-                navigate(`/${profileData ? profileData.username : "profile"}`);
-            } catch (err) {
-                setMessage('Failed to connect with Spotify.');
-            }
+          const data = await response.json();
+          setSpotifyToken(data.access_token);
+          localStorage.setItem('spotifyAccessToken', data.access_token);
+          localStorage.setItem('spotifyRefreshToken', data.refresh_token);
+          setMessage('Spotify connected successfully.');
+          fetchProfile();  
+          navigate(`/${profileData ? profileData.username : "profile"}`);
+        } catch (err) {
+          setMessage('Failed to connect with Spotify.');
         }
+      }
     };
 
     fetchSpotifyToken();
-}, [code, token, profileData, fetchProfile, navigate, API_BASE_URL]);
+  }, [code, token, profileData, fetchProfile, navigate, API_BASE_URL]);
 
   // Handle user registration
   const handleRegister = async () => {
@@ -280,24 +281,24 @@ useEffect(() => {
               <p>Spotify is connected.</p>
               {spotifyData && (
                 <div>
-                  <h3>Spotify Data:</h3>
-                  <p>Display Name: {spotifyData.display_name}</p>
-                  <p>Email: {spotifyData.email}</p>
-                </div>
-              )}
+              <h3>Spotify Data:</h3>
+              <p>Display Name: {spotifyData.display_name}</p>
+              <p>Email: {spotifyData.email}</p>
             </div>
           )}
         </div>
       )}
-
-      {message && <p>{message}</p>}
-
-      <Routes>
-        <Route path="/" element={<div>Home</div>} />
-        <Route path="/:username" element={<div>Profile Data</div>} />
-      </Routes>
     </div>
-  );
+  )}
+
+  {message && <p>{message}</p>}
+
+  <Routes>
+    <Route path="/" element={<div>Home</div>} />
+    <Route path="/:username" element={<div>Profile Data</div>} />
+  </Routes>
+</div>
+);
 }
 
 export default App;
