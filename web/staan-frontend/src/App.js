@@ -97,40 +97,40 @@ function App() {
     }
   }, [API_BASE_URL, fetchSpotifyData]);
 
-  // Handle Spotify token exchange after Spotify login
-  useEffect(() => {
+ // Handle Spotify token exchange after Spotify login
+useEffect(() => {
     const fetchSpotifyToken = async () => {
-      if (code && token) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/users/callback`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            credentials: 'include',
-            body: JSON.stringify({ code }),
-          });
+        if (code && token) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/users/callback`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                    credentials: 'include', // Ensure credentials are included for session handling
+                    body: JSON.stringify({ code }),
+                });
 
-          if (!response.ok) {
-            throw new Error('Failed to exchange Spotify token');
-          }
+                if (!response.ok) {
+                    throw new Error('Failed to exchange Spotify token');
+                }
 
-          const data = await response.json();
-          setSpotifyToken(data.access_token);
-          localStorage.setItem('spotifyAccessToken', data.access_token);
-          localStorage.setItem('spotifyRefreshToken', data.refresh_token);
-          setMessage('Spotify connected successfully.');
-          fetchProfile();  
-          navigate(`/${profileData ? profileData.username : "profile"}`);
-        } catch (err) {
-          setMessage('Failed to connect with Spotify.');
+                const data = await response.json();
+                setSpotifyToken(data.access_token);
+                localStorage.setItem('spotifyAccessToken', data.access_token);
+                localStorage.setItem('spotifyRefreshToken', data.refresh_token);
+                setMessage('Spotify connected successfully.');
+                fetchProfile();  
+                navigate(`/${profileData ? profileData.username : "profile"}`);
+            } catch (err) {
+                setMessage('Failed to connect with Spotify.');
+            }
         }
-      }
     };
 
     fetchSpotifyToken();
-  }, [code, token, profileData, fetchProfile, navigate, API_BASE_URL]);
+}, [code, token, profileData, fetchProfile, navigate, API_BASE_URL]);
 
   // Handle user registration
   const handleRegister = async () => {
