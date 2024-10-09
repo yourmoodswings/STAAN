@@ -24,21 +24,24 @@ app.use(express.json());
 app.use(bodyParser.json());
 
 // Configure session management with PostgreSQL store
-app.use(session({
-  store: new PgSession({
-    pool: dbPool, // Assuming you're using pg-pool for database connection
-    tableName: 'session',
-  }),
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: true, // This ensures cookies are sent only over HTTPS
-    httpOnly: true,
-    maxAge: 3600000, // 1 hour
-    sameSite: 'none',
-  }
-}));
+app.use(
+  session({
+    store: new PgSession({
+      pool: client, // PostgreSQL client
+      tableName: 'session',
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 1000 * 60 * 60, // 1 hour
+      secure: true, // Set to true since you're on HTTPS
+      httpOnly: true,
+      sameSite: 'none', // Critical for cross-site session cookies
+    },
+  })
+);
+
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
