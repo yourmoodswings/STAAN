@@ -38,7 +38,7 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// Route for user login (allowing login via either email or username)
+// Route for user login
 router.post('/login', async (req, res) => {
     const { emailOrUsername, password } = req.body;
 
@@ -93,6 +93,7 @@ router.get('/spotify-login', (req, res) => {
         })
     );
 });
+
 // Callback for Spotify token exchange
 router.get('/callback', async (req, res) => {
     console.log('Session data during Spotify callback:', req.session); 
@@ -167,74 +168,6 @@ router.get('/callback', async (req, res) => {
     } catch (error) {
         console.error('Error during Spotify token exchange:', error.message);
         res.status(500).json({ message: 'Token exchange failed' });
-    }
-});
-
-
-// Route for refreshing the Spotify token
-router.post('/refresh-token', async (req, res) => {
-    try {
-        const userId = req.session?.userId;
-
-        if (!userId) {
-            console.error('User session missing.');
-            req.session.destroy();
-            return res.status(400).json({ message: 'User session missing. Please log in again.' });
-        }
-
-        const query = `
-            SELECT spotify_refresh_token FROM users WHERE id = $1;
-        `;
-        const values = [userId];
-        const { rows } = await pool.query(query, values);
-
-        if (rows.length === 0) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        const { spotify_refresh_token } = rows[0];
-
-        if (!spotify_refresh_token) {
-            return res.status(400).json({ message: 'Spotify refresh token missing. Please reconnect your Spotify account.' });
-        }
-
-        const refreshUrl = 'https://accounts.spotify.com/api/token';
-        const clientId = process.env.SPOTIFY_CLIENT_ID;
-        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-
-        const data = {
-            grant_type: 'refresh_token',
-            refresh_token: spotify_refresh_token,
-        };
-
-        const headers = {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
-        };
-
-        const response = await axios.post(refreshUrl, querystring.stringify(data), { headers });
-
-        const { access_token, expires_in } = response.data;
-        const spotifyTokenExpiresAt = new Date(Date.now() + expires_in * 1000);
-
-        const updateQuery = `
-            UPDATE users
-            SET spotify_access_token = $1,
-                spotify_token_expires_at = $2
-            WHERE id = $3
-            RETURNING id, username, email;
-        `;
-        const updateValues = [access_token, spotifyTokenExpiresAt, userId];
-
-        const result = await pool.query(updateQuery, updateValues);
-
-        res.json({
-            access_token,
-            message: 'Spotify token refreshed successfully',
-        });
-    } catch (error) {
-        console.error('Error refreshing Spotify token:', error);
-        res.status(500).json({ message: 'Failed to refresh Spotify token' });
     }
 });
 
