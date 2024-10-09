@@ -11,7 +11,7 @@ const port = process.env.PORT || 3000;
 
 // CORS setup
 app.use(cors({
-  origin: ['https://staan.onrender.com', 'http://localhost:3001'],
+  origin: ['https://staan.onrender.com'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true // Important for session handling with frontend
@@ -24,23 +24,21 @@ app.use(express.json());
 app.use(bodyParser.json());
 
 // Configure session management with PostgreSQL store
-app.use(
-  session({
-    store: new PgSession({
-      pool: client,
-      tableName: 'session',
-    }),
-    secret: process.env.SESSION_SECRET || '!DontStop!',
-    resave: false, // Ensures the session is only saved if modified
-    saveUninitialized: false, // Prevents uninitialized sessions from being saved
-    cookie: {
-      maxAge: 3600000, // 1 hour
-      secure: true, // Only secure cookies in production
-      httpOnly: true, // Prevent client-side JS from accessing cookies
-      sameSite: 'none', // Required for cross-origin cookies (such as between frontend and backend)
-    },
-  })
-);
+app.use(session({
+  store: new PgSession({
+    pool: dbPool, // Assuming you're using pg-pool for database connection
+    tableName: 'session',
+  }),
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: true, // This ensures cookies are sent only over HTTPS
+    httpOnly: true,
+    maxAge: 3600000, // 1 hour
+    sameSite: 'none',
+  }
+}));
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
