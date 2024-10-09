@@ -17,6 +17,7 @@ app.use(cors({
   credentials: true // Important for session handling with frontend
 }));
 
+
 // Import user-specific routes
 const userRoutes = require('./routes/userRoutes');
 
