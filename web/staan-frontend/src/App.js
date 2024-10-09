@@ -17,7 +17,7 @@ function App() {
   const [spotifyToken, setSpotifyToken] = useState(localStorage.getItem('spotifyAccessToken') || null);
   const [spotifyData, setSpotifyData] = useState(null);
   const navigate = useNavigate();
-  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://staan-backend.onrender.com';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000'; // Fallback to localhost if not set
 
   const code = new URLSearchParams(window.location.search).get('code');
 
@@ -31,7 +31,6 @@ function App() {
       });
 
       if (response.status === 401) {
-        // Spotify token is expired, refresh it
         const refreshedTokenResponse = await fetch(`${API_BASE_URL}/api/users/refresh-token`, {
           method: 'POST',
           headers: {
@@ -44,7 +43,7 @@ function App() {
           const refreshedData = await refreshedTokenResponse.json();
           const newAccessToken = refreshedData.access_token;
           localStorage.setItem('spotifyAccessToken', newAccessToken);
-          return await fetchSpotifyData(newAccessToken); // Retry with new token
+          return await fetchSpotifyData(newAccessToken);
         } else {
           throw new Error('Failed to refresh Spotify token.');
         }
@@ -73,7 +72,7 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${storedToken}`,
+          'Authorization': `Bearer ${storedToken}`,
           'Content-Type': 'application/json',
         },
         credentials: 'include',
@@ -107,9 +106,9 @@ function App() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+              'Authorization': `Bearer ${token}`,
             },
-            credentials: 'include', // Ensure credentials are included for session handling
+            credentials: 'include',
             body: JSON.stringify({ code }),
           });
 
@@ -281,24 +280,24 @@ function App() {
               <p>Spotify is connected.</p>
               {spotifyData && (
                 <div>
-              <h3>Spotify Data:</h3>
-              <p>Display Name: {spotifyData.display_name}</p>
-              <p>Email: {spotifyData.email}</p>
+                  <h3>Spotify Data:</h3>
+                  <p>Display Name: {spotifyData.display_name}</p>
+                  <p>Email: {spotifyData.email}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
+
+      {message && <p>{message}</p>}
+
+      <Routes>
+        <Route path="/" element={<div>Home</div>} />
+        <Route path="/:username" element={<div>Profile Data</div>} />
+      </Routes>
     </div>
-  )}
-
-  {message && <p>{message}</p>}
-
-  <Routes>
-    <Route path="/" element={<div>Home</div>} />
-    <Route path="/:username" element={<div>Profile Data</div>} />
-  </Routes>
-</div>
-);
+  );
 }
 
 export default App;
