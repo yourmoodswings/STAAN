@@ -11,7 +11,7 @@ const port = process.env.PORT || 3000;
 
 // CORS setup
 app.use(cors({
-  origin: ['https://staan.onrender.com'],
+  origin: 'https://staan.onrender.com', // Specify the frontend domain
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true // Important for session handling with frontend
