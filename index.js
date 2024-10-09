@@ -9,14 +9,13 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// CORS setup
+// CORS setup for local development
 app.use(cors({
-  origin: 'https://staan.onrender.com', // Specify the frontend domain
+  origin: 'http://localhost:3001',  // Set to the frontend's local port
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true // Important for session handling with frontend
 }));
-
 
 // Import user-specific routes
 const userRoutes = require('./routes/userRoutes');
@@ -31,18 +30,17 @@ app.use(
       pool: client, // PostgreSQL client
       tableName: 'session',
     }),
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET,  // Ensure you have this in your .env file
     resave: false,
     saveUninitialized: false,
     cookie: {
       maxAge: 1000 * 60 * 60, // 1 hour
-      secure: true, // Set to true since you're on HTTPS
+      secure: false, // Secure must be false for HTTP (local development)
       httpOnly: true,
-      sameSite: 'none', // Critical for cross-site session cookies
+      sameSite: 'none', // 'Lax' is fine for local dev, adjust if needed for cross-site requests
     },
   })
 );
-
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
