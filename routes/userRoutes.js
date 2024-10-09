@@ -93,7 +93,6 @@ router.get('/spotify-login', (req, res) => {
         })
     );
 });
-
 // Callback for Spotify token exchange
 router.get('/callback', async (req, res) => {
     console.log('Session data during Spotify callback:', req.session); 
@@ -121,7 +120,10 @@ router.get('/callback', async (req, res) => {
             Authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
         };
 
-        const response = await axios.post(tokenUrl, querystring.stringify(data), { headers });
+        const response = await axios.post(tokenUrl, querystring.stringify(data), {
+            headers,
+            withCredentials: true // Ensure session cookie is sent with the request
+        });
         const { access_token, refresh_token, expires_in } = response.data;
         console.log('Received Spotify tokens:', { access_token, refresh_token, expires_in });
 
@@ -167,6 +169,7 @@ router.get('/callback', async (req, res) => {
         res.status(500).json({ message: 'Token exchange failed' });
     }
 });
+
 
 // Route for refreshing the Spotify token
 router.post('/refresh-token', async (req, res) => {
